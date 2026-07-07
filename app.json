@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "CurryCloud",
+    "slug": "currycloud-mobile",
+    "scheme": "currycloud",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
+    "plugins": [
+      "expo-router",
+      "expo-image",
+      "expo-audio"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vorpet.currycloud"
+    },
+    "android": {
+      "package": "com.vorpet.currycloud",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#6D28D9"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "34552227-8b31-4bab-92f6-ef376661259c"
+      }
+    }
+  }
+}
