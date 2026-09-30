@@ -32,6 +32,34 @@ interface AddedItem {
   is_veg: boolean;
 }
 
+const money = (x: number) => "₹" + x.toFixed(2);
+
+function BreakRow({
+  label,
+  value,
+  strong,
+  tint,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+  tint?: string;
+}) {
+  return (
+    <View style={[styles.breakRow, strong && styles.breakRowStrong]}>
+      <Text
+        style={[styles.breakLabel, strong && styles.breakStrong, tint ? { color: tint } : null]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+      <Text style={[styles.breakValue, strong && styles.breakStrong, tint ? { color: tint } : null]}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 export default function SettlementScreen() {
   const { session } = useAuth();
   const [bills, setBills] = useState<Bill[]>([]);
@@ -120,6 +148,47 @@ export default function SettlementScreen() {
     return keptTotal + addedTotal;
   }, [currentItems, removedIds, addedItems]);
 
+  const hasChanges = removedIds.length > 0 || addedItems.length > 0;
+
+  // Bill total after this settlement — same rules the server applies on save.
+  const preview = useMemo(() => {
+    const n = (v: unknown) => Number(v ?? 0) || 0;
+    const r2 = (x: number) => Math.round((x + Number.EPSILON) * 100) / 100;
+    const o: any = billDetail?.order;
+    const discount = n(o?.discount_amount);
+    const promo = n(billDetail?.promo_amount ?? o?.promo_amount);
+    const surcharge = n(o?.table_surcharge_amount) || n(o?.service_charge);
+    const base = Math.max(0, newSubtotal - discount - promo);
+    const cs = session?.company_settings;
+    let sgstRate: number;
+    let cgstRate: number;
+    let taxAmt: number;
+    if (cs && billDetail && billDetail.company_unique_id === session?.company_unique_id) {
+      sgstRate = n(cs.sgst);
+      cgstRate = n(cs.cgst);
+      taxAmt = r2(r2((base * sgstRate) / 100) + r2((base * cgstRate) / 100));
+    } else {
+      // another branch's bill: derive the combined rate from the tax already stored on it
+      const oldBase = Math.max(0, n(billDetail?.subtotal) - discount - promo);
+      const rate = oldBase > 0 ? (n(billDetail?.tax_amount) / oldBase) * 100 : 0;
+      sgstRate = cgstRate = r2(rate / 2);
+      taxAmt = r2(2 * r2((base * rate) / 200));
+    }
+    const raw = newSubtotal - discount - promo + surcharge + taxAmt;
+    const total = Math.floor(raw + 0.5);
+    return {
+      discount,
+      promo,
+      surcharge,
+      sgstRate,
+      cgstRate,
+      taxAmt,
+      roundOff: r2(total - raw),
+      total,
+      delta: total - n(selectedBill?.total_payable),
+    };
+  }, [billDetail, newSubtotal, session, selectedBill]);
+
   const confirmSettle = async () => {
     if (!selectedBill || !session) return;
     setSaving(true);
@@ -205,7 +274,7 @@ export default function SettlementScreen() {
                 {loadingDetail ? (
                   <ActivityIndicator color={colors.primary} style={{ marginVertical: 30 }} />
                 ) : (
-                  <ScrollView style={{ maxHeight: 340 }} keyboardShouldPersistTaps="handled">
+                  <ScrollView style={{ maxHeight: 240 }} keyboardShouldPersistTaps="handled">
                     <Text style={styles.sectionLabel}>Current Items</Text>
                     {currentItems.length === 0 && (
                       <Text style={styles.emptyDetailText}>No items on this bill.</Text>
@@ -256,11 +325,45 @@ export default function SettlementScreen() {
                   </ScrollView>
                 )}
 
-                <View style={styles.subtotalRow}>
-                  <Text style={styles.subtotalLabel}>New subtotal</Text>
-                  <Text style={styles.subtotalValue}>₹{newSubtotal.toFixed(2)}</Text>
-                </View>
-                <Text style={styles.subtotalHint}>SGST/CGST & final total recomputed on save</Text>
+                {!loadingDetail && billDetail && (
+                  <View style={styles.breakBox}>
+                    <BreakRow
+                      label={hasChanges ? "Items (after your changes)" : "Items"}
+                      value={money(newSubtotal)}
+                    />
+                    {preview.discount > 0 && (
+                      <BreakRow label="Discount" value={`− ${money(preview.discount)}`} />
+                    )}
+                    {preview.promo > 0 && (
+                      <BreakRow
+                        label={`Promo${billDetail.promo_code ? ` (${billDetail.promo_code})` : ""}`}
+                        value={`− ${money(preview.promo)}`}
+                      />
+                    )}
+                    {preview.surcharge > 0 && (
+                      <BreakRow label="Service / table charge" value={`+ ${money(preview.surcharge)}`} />
+                    )}
+                    <BreakRow
+                      label={`Tax (SGST ${preview.sgstRate}% + CGST ${preview.cgstRate}%)`}
+                      value={`+ ${money(preview.taxAmt)}`}
+                    />
+                    {preview.roundOff !== 0 && (
+                      <BreakRow
+                        label="Round off"
+                        value={`${preview.roundOff > 0 ? "+" : "−"} ${money(Math.abs(preview.roundOff))}`}
+                      />
+                    )}
+                    <BreakRow strong label="Bill total after settling" value={money(preview.total)} />
+                    {hasChanges && preview.delta !== 0 && (
+                      <BreakRow
+                        tint={preview.delta > 0 ? "#B45309" : "#15803D"}
+                        label="Change from current total"
+                        value={`${preview.delta > 0 ? "+" : "−"} ${money(Math.abs(preview.delta))}`}
+                      />
+                    )}
+                  </View>
+                )}
+                <Text style={styles.subtotalHint}>The server recalculates the final amounts when you settle.</Text>
 
                 <View style={styles.sheetFooter}>
                   <TouchableOpacity style={styles.cancelButton} onPress={() => setSelectedBill(null)}>
@@ -375,7 +478,13 @@ const styles = StyleSheet.create({
   subtotalRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 14 },
   subtotalLabel: { fontSize: 14, fontWeight: "700", color: colors.text },
   subtotalValue: { fontSize: 15, fontWeight: "700", color: colors.primaryDark },
-  subtotalHint: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  subtotalHint: { fontSize: 11, color: colors.textMuted, marginTop: 4 },
+  breakBox: { marginTop: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 },
+  breakRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
+  breakRowStrong: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 4, paddingTop: 7 },
+  breakLabel: { flex: 1, fontSize: 13, color: colors.textMuted, marginRight: 8 },
+  breakValue: { fontSize: 13, color: colors.text },
+  breakStrong: { fontSize: 15, fontWeight: "700", color: colors.primaryDark },
   sheetFooter: { flexDirection: "row", gap: 10, marginTop: 16 },
   cancelButton: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingVertical: 12, alignItems: "center" },
   cancelText: { color: colors.textMuted, fontWeight: "600" },
