@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { UserSession } from "../api/types";
 
-const STORAGE_KEY = "currycloud.session";
+const STORAGE_KEY = "vorpetpos.session";
 
 interface AuthContextValue {
   session: UserSession | null;

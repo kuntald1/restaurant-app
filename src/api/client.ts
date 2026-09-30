@@ -1,5 +1,5 @@
 // src/api/client.ts
-const BASE_URL = "https://currycloud.mooo.com";
+const BASE_URL = "https://pos.vorpet.com";
 
 export class ApiError extends Error {
   status: number;

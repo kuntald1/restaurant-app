@@ -21,7 +21,7 @@ function LoadingScreen() {
         contentFit="contain"
         autoplay
       />
-      <Text style={styles.loadingTitle}>CurryCloud</Text>
+      <Text style={styles.loadingTitle}>Vorpet POS</Text>
     </LinearGradient>
   );
 }
